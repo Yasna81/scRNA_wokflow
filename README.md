@@ -1,6 +1,17 @@
 # scRNA_wokflow
 Personal notes and scripts for single cell analysis 
 
+
+<img width="994" height="605" alt="chord" src="https://github.com/user-attachments/assets/c87d02cc-d94e-40c9-94ba-482d1bb49e53" />
+
+
+
+
+
+
+
+
+
 #### The main workflow is : 
 ##### 1- QC  : checking MT percentage, batch effect ?,filtering base on number of transcripts (nFeature_RNA)
 ###### hint : you can find better thresholds by looking at the vln plot of "nFeature_RNA" , "nCount_RNA","percent.mt"
