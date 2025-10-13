@@ -2,7 +2,7 @@
 Personal notes and scripts for single cell analysis 
 
 
-<img width="894" height="405" alt="chord" src="https://github.com/user-attachments/assets/c87d02cc-d94e-40c9-94ba-482d1bb49e53" />
+<img width="694" height="205" alt="chord" src="https://github.com/user-attachments/assets/c87d02cc-d94e-40c9-94ba-482d1bb49e53" />
 
 
 
