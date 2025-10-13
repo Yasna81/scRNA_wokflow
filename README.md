@@ -2,38 +2,46 @@
 Personal notes and scripts for single cell analysis 
 
 
-<img width="994" height="605" alt="chord" src="https://github.com/user-attachments/assets/c87d02cc-d94e-40c9-94ba-482d1bb49e53" />
+<img width="894" height="405" alt="chord" src="https://github.com/user-attachments/assets/c87d02cc-d94e-40c9-94ba-482d1bb49e53" />
 
 
 
 
+### keep these in mind :
+
+
+#### creating a suerat object by CreateSeuratObject(),loading data by Read10x()
+
+the data structure in a single cell analysis is as follows >>
 
 
 
+<img width="859" height="373" alt="image" src="https://github.com/user-attachments/assets/99b697e1-030a-41e3-986b-f685ed8c3945" />
 
 
-#### The main workflow is : 
-##### 1- QC  : checking MT percentage, batch effect ?,filtering base on number of transcripts (nFeature_RNA)
-###### hint : you can find better thresholds by looking at the vln plot of "nFeature_RNA" , "nCount_RNA","percent.mt"
+When we want to add new columns to the metadata, we use [[]].like as 
 
 
-##### 2- stat : normalization: scale, dimensionality reduction (pca and umap)
-###### hint : pca is linear but umap is better for visualization 
+
+```
+# The [[ operator can add columns to object metadata. This is a great place to stash QC stats.
+pbmc[["percent.mt"]] <- PercentageFeatureSet(pbmc, pattern = "^MT-")
+```
 
 
-##### 3- we get to ELbowplot : choose the number of pcs based on the plot for down stream analysis. use FindNeighbors() and FindClusters() and RunUmap() for the clusters umap by DimPlot()
-
-##### 4- cell type anotation : mainly conducted in 2 ways: 1- manual 2- by SingleR 
+#### want to normalize ? NormalizeData()
 
 
-###### this workflow is manual , by checking significant cell markers.
+#### Identification of highly variable features (feature selection) >> FindVariableFeatures ()
 
 
-###### 4-1 : choosing markers : we inteparate FeaturePlots for different cell markers while we have an eye on our initial umap plot we manully align brighter parts of a feature plot to a cluster in our umap. we assing our seurat object levels to the cell tyes that we found.
-
-##### 5- want DEGs ? FindAllMarkers(pbmc,) then go for ORA or GSEA
-
-##### 6- cell cell comunication :/cellchat GetAssayData()/ choose species / subset, identifyoverexpression/compute common probe/aggregate/ different plots
+#### scaling ? ScaleData()
 
 
-##### 7- trajectory : slingshot/tradeSeq/SingleCellExprement/
+#### dimentional reduction :  > Runpca()- its linear-
+
+
+#### clustering : FindNeighbors(),FindClusters(),
+
+#### RunUMAP/RunTSNE : reducing dimentionality but non-linear
+
