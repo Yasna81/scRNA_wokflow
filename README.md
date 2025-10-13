@@ -1,8 +1,8 @@
 # scRNA_wokflow
 Personal notes and scripts for single cell analysis 
 
+<img width="1470" height="1667" alt="image" src="https://github.com/user-attachments/assets/172c764d-8ac3-435a-b63e-89a0965208c4" />
 
-<img width="994" height="605" alt="chord" src="https://github.com/user-attachments/assets/c87d02cc-d94e-40c9-94ba-482d1bb49e53" />
 
 
 
