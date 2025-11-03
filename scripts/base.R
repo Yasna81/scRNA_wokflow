@@ -1,13 +1,13 @@
-install.packages("BiocManager")
+#install.packages("BiocManager")
 library(BiocManager)
-BiocManager::install("Seurat")
+#BiocManager::install("Seurat")
 library(Seurat)
 #-----------------------------------------------
-if (!requireNamespace("remotes",quietly = TRUE))
-    install.packages("remotes")
+#if (!requireNamespace("remotes",quietly = TRUE))
+   # install.packages("remotes")
 library(remotes)
-remotes::install_github("satijalab/seurat-data")
-library(SeuratData)
+#remotes::install_github("satijalab/seurat-data")
+#library(SeuratData)
 #InstallData("pbmc3k")
 #options(timeout = 600)
 pbmc.data <- Read10X(data.dir = "~/practice/filtered_gene_bc_matrices/hg19")
@@ -20,6 +20,7 @@ pbmc[["percent.mt"]] <- PercentageFeatureSet(pbmc,pattern = "^MT-")
 VlnPlot(pbmc,features = c ("nFeature_RNA","nCount_RNA","percent.mt"))
 # a basic filtering :
 pbmc <- subset(pbmc , subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+
 #norm :
 pbmc <- NormalizeData(pbmc)
 #featureselection
@@ -32,22 +33,18 @@ pbmc <- FindNeighbors(pbmc, dims = 1:15)
 pbmc <- FindClusters(pbmc, resolution = 0.5)
 pbmc <- RunUMAP(pbmc , dim = 1:15 )
 DimPlot(pbmc , reduction = "umap")
-#finding markers :
-library(dplyr)
-pbmc.markers <- FindAllMarkers(pbmc, only.pos = TRUE , min.pct = 0.25 ,logfc.threshold = 0.25)
-pbmc.markers %>% group_by(cluster) %>% top_n(n=2,wt=avg_log2FC)
-Idents(pbmc) <- pbmc$seurat_clusters
 
-#library(SingleR)
-#library(SingleCellExperiment)
-library(dplyr)
 
-DimPlot(pbmc, reduction = "umap", label = TRUE,pt.size = 0.5)
+#----------------------------------------------------------------------------
+#downstream_analysis 
+#---------------------------------------------------------------------------
+library(Seurat)
 FeaturePlot(pbmc,features = c("CD3D","CD8A","MS4A1","MKG7","CD14","FCER1A","PPBP"), reduction = "umap",pt.size = 0.5)
 #
 FeaturePlot(pbmc,features = c("IL7R","CCR7","S100A4","MS4A1","CD79A","NKG7","GNLY"), reduction = "umap",pt.size = 0.5)
 FeaturePlot(pbmc,features = c("GZMB","NKG7","MKI67","HLA-DRA","PDCD1","CD4"), reduction = "umap",pt.size = 0.5)
-new.cluster.ids <- c(
+#annots 
+corrected_annotations <- c(
     "Memory CD4 T",#0
     "Naive CD4 T",#1
     "CD14+ Monocytes",#2
@@ -58,78 +55,51 @@ new.cluster.ids <- c(
     "DC",#7
     "Platalets" #8
 )
-names(new.cluster.ids) <- levels(pbmc)
-pbmc <- RenameIdents(pbmc, new.cluster.ids)
+names(corrected_annotations) <- levels(pbmc)
+pbmc <- RenameIdents(pbmc, corrected_annotations)
 DimPlot(pbmc, reduction =  "umap", label = TRUE , pt.size = 0.5,repel = TRUE) + ggplot2::ggtitle("PBMC anotation")
-#GSEA :
-#install.packages("clusterProfiler")
-library(clusterProfiler)
-#install.packages("org.Hs.eg.db")
-library(org.Hs.eg.db)
-library(enrichplot)
-# lets look for DEGs 
-library(Seurat)
+
 #Idents(pbmc) <- pbmc$seurat_clusters
-markers <- FindAllMarkers(pbmc ,only.ops = TRUE , min.pct = 0.25,logfc.threshold = 0.25)
-###lets check the pathways for activated cd4 t : 
-cluster_name <- "Activated Memory CD4 T"
-cluster_genes <- subset(markers, cluster == cluster_name)
-gene_ranks <- cluster_genes %>%
-    arrange(desc(avg_log2FC))
-gene_ranks$gene_sym <- rownames(gene_ranks)
-gene_names <- bitr(gene_ranks$gene,
-                   fromType =  "SYMBOL",
-                   toType = "ENTREZID",
-                   org.Hs.eg.db)
-final_gene <- merge(gene_ranks,gene_names, by.x = "gene",by.y = "SYMBOL")
-#oRA 
-library(dplyr)
-gene_list<- final_gene %>%
-    arrange(desc(avg_log2FC))
+library(fgsea)
+library(msigdbr)
+#comparing markers between 2 cell types :
+de_genes <- FindMarkers(pbmc,
+                        ident.1 = "Activated Memory CD4 T",   
+                        ident.2 = "Naive CD4 T",
+                        min.pct = 0.25,
+                        logfc.threshold = 0.25,
+                        test.use = "wilcox")
+de_genes <- de_genes[!is.na(de_genes$avg_log2FC), ]
+gene_ranks <- de_genes$avg_log2FC
+names(gene_ranks) <- rownames(de_genes)
+gene_ranks <- sort(gene_ranks, decreasing = TRUE)
+hallmark_sets <- msigdbr(species = "Homo sapiens", category = "H")
+pathways <- split(hallmark_sets$gene_symbol, hallmark_sets$gs_name)
 
-sig_genes <- final_gene$ENTREZID[abs(final_gene$avg_log2FC) > 1]
-ego <- enrichGO(
-    gene = sig_genes,
-    OrgDb = org.Hs.eg.db ,
-    keyType = "ENTREZID",
-    ont = "BP",
-    pAdjustMethod = "BH",
-    pvalueCutoff = 0.05 , 
-    qvalueCutoff = 0.2
-)
-dotplot(ego, showCategory = 20)
+fgsea_results <- fgsea(pathways = pathways,
+                       stats = gene_ranks,
+                       minSize = 15,      # Minimum genes in pathway
+                       maxSize = 500)
 
-#### B cells :
-cluster_name <- "B Cell"
-cluster_genes <- subset(markers, cluster == cluster_name)
-gene_ranks <- cluster_genes %>%
-    arrange(desc(avg_log2FC))
-gene_ranks$gene_sym <- rownames(gene_ranks)
-gene_names <- bitr(gene_ranks$gene,
-                   fromType =  "SYMBOL",
-                   toType = "ENTREZID",
-                   org.Hs.eg.db)
-final_gene <- merge(gene_ranks,gene_names, by.x = "gene",by.y = "SYMBOL")
-#oRA 
-library(dplyr)
-gene_list<- final_gene %>%
-    arrange(desc(avg_log2FC))
+fgsea_results <- fgsea_results[order(fgsea_results$NES, decreasing = TRUE), ]
+#tops :
+top_up <- head(fgsea_results[fgsea_results$NES > 0 & fgsea_results$padj < 0.05, ], 10)
+top_down <- head(fgsea_results[fgsea_results$NES < 0 & fgsea_results$padj < 0.05, ], 10)
+sig_pathways <- fgsea_results[padj < 0.05]
+ggplot(sig_pathways, aes(x = NES, y = pathway, color = NES, size = -log10(padj))) +
+    geom_point() +
+    scale_color_gradient2(low = "blue", high = "red", mid = "grey", midpoint = 0) +
+    geom_vline(xintercept = 0, linetype = "dashed") +
+    labs(title = "Pathway Enrichment", x = "NES", y = NULL) +
+    theme_minimal() +
+    theme(legend.position = "right")
 
-sig_genes <- final_gene$ENTREZID[abs(final_gene$avg_log2FC) > 1]
-ego <- enrichGO(
-    gene = sig_genes,
-    OrgDb = org.Hs.eg.db ,
-    keyType = "ENTREZID",
-    ont = "BP",
-    pAdjustMethod = "BH",
-    pvalueCutoff = 0.05 , 
-    qvalueCutoff = 0.2
-)
-dotplot(ego, showCategory = 10)
+#-------------------------------------------------------------------------
+
 #computing cell cell comunication :
 #BiocManager::install("CellChat")
 library(remotes)
-remotes::install_github("sqjin/CellChat")
+#remotes::install_github("sqjin/CellChat")
 library(CellChat)
 library(patchwork)
 data.input <- GetAssayData(pbmc, assay = "RNA",slot = "data")
@@ -149,22 +119,38 @@ cellchat <- computeCommunProbPathway(cellchat)
 cellchat <- aggregateNet(cellchat)
 #overall network strength
 netVisual_circle(cellchat@net$count,vertex.weight = TRUE, weight.scale = TRUE)
-#pathway specific network : which clusters communicate via the MHC-I pathway 
-netVisual_aggregate(cellchat,signaling = "MHC-I",layout = "circle")
-#bubble plot : top ligand receptor pairs
+#top ligand receptor pairs
 netVisual_bubble(cellchat, sources.use = c(1,2), targets.use = c(3,4))
+####What signals do myeloid cells provide to the immune system?
+
+myeloid_senders <- c("CD14+ Monocytes", "DC")
+
+cellchat <- computeCommunProb(cellchat)
+
+# Then visualize
+netVisual_chord_gene(cellchat, 
+                     sources.use = myeloid_senders,
+                     targets.use = c("Naive CD4 T", "Memory CD4 T", "CD8 T", "B cells"))
+
+#pathway specific network : which clusters communicate via this pathway 
+netVisual_aggregate(cellchat,signaling = "CD99",layout = "circle")
+netVisual_aggregate(cellchat,signaling = "MIF",layout = "circle")
+netVisual_aggregate(cellchat,signaling = "GALECTIN",layout = "circle")
 #which ligands and receptors contribute to a given pathway
-netVisual_chord_gene(cellchat,signaling = "MHC-I")
+netVisual_chord_gene(cellchat,signaling = "GALECTIN")
 #the most influential ligand-receptors
-netAnalysis_contribution(cellchat,signaling = "MHC-I")
+netAnalysis_contribution(cellchat,signaling = "GALECTIN")
 ####----------------------------------------------------------------------------------
 #trajectory_analysis :
 #remotes::install_github("kstreet13/slingshot")
 #remotes::install_github("statOmics/tradeSeq")
+remotes::install_github('cole-trapnell-lab/monocle3')
 library(slingshot)
 library(tradeSeq)
 library(SingleCellExperiment)
 library(Seurat)
+library(RColorBrewer)
+library(matrixStats)
 sce <- as.SingleCellExperiment(pbmc)
 sce$clusters <- Idents(pbmc)
 sce <- slingshot(
@@ -177,63 +163,37 @@ library(RColorBrewer)
 colors <- brewer.pal(length(unique(sce$seurat_clusters)), "Set1")
 plot(reducedDims(sce)$UMAP, col = sce$clusters,pch = 16)
 lines(SlingshotDataSet(sce), lwd = 2, col = "black")
-library(matrixStats)
-# genes changing along pseudotime :
-top_genes <- head(order(rowVars(log1p(counts(sce))),decreasing = TRUE),200)
+##--------------------------------------------------
+immune_genes <- c(
+    # Naive markers
+    "CCR7", "SELL", "TCF7", "LEF1", "IL7R",
+    # Early activation
+    "CD69", "CD25", "CD71", "CD38",
+    # Housekeeping (controls)
+    "CD3D", "CD3E", "CD4", "CD8A", "CD8B"
+)
 
-#fitting GAM 
-sce_subset <- sce[top_genes,]
-set.seed(1)
-sce_subset <- fitGAM(sce_subset,nknots = 4 , parallel = FALSE)
-plotSmoothers(sce_subset,assays(sce_subset)$counts, gene = "CD3D")
-plotSmoothers(sce_subset,assays(sce_subset)$counts, gene = "CD3D", alpha = 0.6)
-#association test :
-assoRes <- associationTest(sce_subset)
-head(assoRes)
-#lets get to the significant onse: gene changes significantly along pseudo time in at least one linage
-topGenes <- rownames(assoRes)[assoRes$pvalue <0.05]
-head(top_genes)
-sig <- assoRes %>% subset(assoRes$pvalue != 0.000000e+00)
-# which genes differ between linages (genes with different expression at the endpoint of linage ):
-diffEndRes <- diffEndTest(sce_subset)
-head(diffEndRes)
-sig_end <- diffEndRes %>% subset(diffEndRes$pvalue <=0.05 & diffEndRes$pvalue != 0.000000e+00)
-top5_lowest_p <- sig_end %>%
-    arrange(pvalue) %>%
-    head(5)
-ggplot(top5_lowest_p, aes(x=rownames(top5_lowest_p), y = pvalue))+ 
-    geom_bar(stat = "identity", fill = "steelblue", alpha = 0.7) +
-    labs(title = "Top 5 Most Significant Variables",
-         x = "Variables",
-         y = "P-value") +
-    theme_minimal() +
+# Filter 
+immune_genes <- immune_genes[immune_genes %in% rownames(sce)]
+sce_subset <- sce[immune_genes, ]
 
+sce_full <- fitGAM(sce_subset, nknots = 4, parallel = TRUE)
 
-#LETS CHECK FR A SIGNIFICANT GENE "ACTB"
-plotSmoothers(sce_subset,assays(sce_subset)$counts, gene = "ACTB")
-#
-lineages <- slingLineages(sce)
-# we want to get dominant cells in each linage
-sce_1 <- slingshot(sce,clusterLabels = sce$clusters,reducedDim = "UMAP")
-pseudo <- as.data.frame(slingPseudotime(sce_1))
-pseudo$cell <- rownames(pseudo)
-meta <- data.frame(cell = rownames(colData(sce_1)),
-                   celltype = sce_1$clusters
-                   )
-df <- merge(meta,pseudo, by = "cell")
-head(df)
-#identify lineage :
-pseudo$lineage <- apply(pseudo[,grep("Lineage",colnames(pseudo))],1,function(x) {
-    if (all(is.na(x))) return(NA)
-    colnames(pseudo)[grep("Lineage",colnames(pseudo))][which.min(x)]
-})
-head(pseudo)
+# Find genes that significantly change along trajectory
+pattern_results <- patternTest(sce_full)
+significant_genes <- pattern_results[pattern_results$pvalue < 0.05, ]
+significant_genes <- significant_genes[order(significant_genes$waldStat, decreasing = TRUE), ]
 
-merged <- merge(meta,pseudo[,c("cell","lineage")], by = "cell")
-#summary :
-library(dplyr)
-dominant <- merged %>% 
-    group_by(lineage,celltype) %>%
-    summarise(count = n()) %>%
-    mutate(precent = count / sum(count * 100)) %>%
-    arrange(lineage, desc(precent))
+plotSmoothers(sce_full,assays(sce_subset)$counts, gene = "CD69", alpha = 0.6)
+plotSmoothers(sce_full,assays(sce_subset)$counts, gene = "CCR7", alpha = 0.6)
+plotSmoothers(sce_full,assays(sce_subset)$counts, gene = "CD4", alpha = 0.6)
+#Pyscenic prerequisites 
+expr <- as.matrix(GetAssayData(pbmc, assay ="RNA",layer = "data"))
+rownames(expr) <- sub("\\..*","",rownames(expr))
+expr_df <- data.frame(Gene = rownames(expr),expr,check.names = FALSE)
+expr_hgnc <- expr_genes[expr_genes %in% tf_list]
+write.csv(expr_df,"exp-clean.csv",row.names = FALSE,quote = FALSE)
+tf_list <- readLines("~/pacakges-set/allTFs_hg38.txt")
+expr_genes <- rownames(expr)
+sum(tf_list %in% expr_genes)
+head()
