@@ -1,9 +1,18 @@
 ## Single cell gene regulatory analysis of PBMC workflow
 
 
-### 📁 repo 
-  #### results --------workflow_result_pbmc.pdf 
-  #### scripts ----- pyscenic: .yaml/transpose
+📁 scenic_project/
+ ├── plots/
+ ├── scripts/
+    └──pyscenic/
+     ├── pyscenic_env.yml
+     └── pyscenic_commands.txt
+    └── transpose.py
+    └──base.R
+    └──regulons.R
+├── Workflow_results_pbmc3k.pdf
+
+
 
 
 
